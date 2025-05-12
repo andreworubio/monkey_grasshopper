@@ -1,1 +1,1 @@
-R-code and raw data for reviewers
+Data for editors and reviewers
