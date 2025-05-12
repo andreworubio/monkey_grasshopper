@@ -1,0 +1,168 @@
+---
+title: "the_escape_artist"
+output: html_document
+date: "2024-06-03"
+---
+
+Libraries
+```{r}
+library(ggthemes)
+library(RColorBrewer)
+library(extrafont)
+library(grid)
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(ggpattern)
+library(gridExtra)
+library(patchwork)
+library(dplyr)
+```
+
+```{r}
+escape <- read.csv("hoppers.csv")
+
+str(escape)
+
+escape$Location <- factor(escape$Location, 
+                             levels = c("matched", "unmatched"), 
+                             labels = c("Matched", "Unmatched"))
+
+escape$Location <- factor(escape$Location, levels = c("Unmatched", "Matched"))
+```
+
+```{r}
+is.factor(escape$Location)
+escape$Location <- as.factor(escape$Location)
+is.factor(escape$Location)
+
+model <- lmer(Initiation_distance ~ Location + Flight_number + (1|Hopper), data = escape)
+summary(model)
+
+
+#estimate repeatability by dividing the amount of variation explained by individual ID by the total variance explained by individual ID and residuals (VID / VID + VR)
+
+var_components <- as.data.frame(VarCorr(model))
+var_components
+
+VID <- var_components$vcov[var_components$grp == "Hopper"]
+VID
+
+VR <- attr(VarCorr(model), "sc")^2
+VR
+
+repeatability <- VID / (VID + VR)
+repeatability
+```
+
+
+```{r}
+table_contact_location <- table(escape$Contact, escape$Location)
+table_contact_location
+
+#Chi-Square test
+chisq_test <- chisq.test(table_contact_location)
+print(chisq_test)
+
+#Fisher's Exact test
+fisher_test <- fisher.test(table_contact_location)
+print(fisher_test)
+
+```
+```{r}
+a <- ggplot(escape, aes(x = Location, y = Initiation_distance, fill = Location)) +
+geom_violin (trim = FALSE, alpha = 0.5) +
+  geom_jitter(color = "black", width = 0.15, alpha = 0.5) +
+  scale_fill_manual(values=c("grey", "grey")) +
+  labs(x = "", y = "Initiation Distance (cm)") +
+  theme_minimal() +
+  theme(legend.position = "none", 
+        axis.title.x = element_text(margin = margin(t = 18), size = 0),  
+        axis.title.y = element_text(margin = margin(r = 10), size = 12),
+        axis.text.x = element_text(margin = margin(t = 4), size = 12, color = "black"))
+
+a
+
+ggsave("initiation_distance.pdf", path = "figures/")
+ggsave("initiation_distance.png", path = "figures/")
+
+b <- ggplot(escape, aes(x = Location, fill = factor(Contact))) +
+  geom_bar_pattern(
+    aes(pattern = factor(Contact)), width = 0.8,  
+    position = "fill",  
+    pattern_density = 0.1,  
+    pattern_angle = 45,  
+    pattern_spacing = 0.05,  
+    color = "black",  
+    size = 0.5 
+  ) +
+  scale_pattern_manual(values = c("0" = "circle", "1" = "crosshatch")) +  
+  scale_fill_manual(values = c("0" = "white", "1" = "white")) +
+  labs(y = "Deimatic display initiated\nby physical contact", x = "Location", fill = "Contact") +
+  theme_minimal() +
+  theme(legend.position = "none", 
+        axis.title.x = element_text(margin = margin(t = 18), size = 0),  
+        axis.title.y = element_text(margin = margin(r = 10), size = 12),
+        axis.text.x = element_text(margin = margin(t = 4), size = 12, color = "black"))
+
+b
+
+ggsave("contact_proportion.pdf", path = "figures/")
+ggsave("contact_proportion.png", path = "figures/")
+
+grid.arrange(a, b, ncol = 2)
+
+a <- a + plot_annotation(tag_levels = "A")
+B <- b + plot_annotation(tag_levels = "B")
+
+figure_2 <- a + b
+
+figure_2
+
+ggsave("Figure_2.pdf", path = "figures/")
+ggsave("Figure_2.png", path = "figures/")
+
+#touch 20
+#non-touch 11
+#total 31
+
+20/31
+```
+
+#the first flight for each grasshopper represents their initial location and doesn't reflect the true choice of background (since it's the starting point). I need to remove the first flight for each grasshopper before performing a glmm
+```{r}
+# Remove the first flight for each hopper
+clean_data <- escape %>%
+  group_by(Hopper) %>%
+  filter(Flight_number > 1) %>%
+  ungroup()
+
+glmm_model <- glmer(Location ~ 1 + (1 | Hopper), 
+                    data = clean_data, 
+                    family = binomial)
+
+# View the model results
+summary(glmm_model)
+```
+
+
+To test if the distance traveled decreases after each jump, you can use a linear mixed-effects model (LMM) because your data has multiple measurements per grasshopper (i.e., repeated measures).
+```{r}
+data_clean <- escape[!is.na(escape$Distance_traveled), ]
+
+data_clean
+
+# Fit a linear mixed effects model
+model <- lmer(Distance_traveled ~ Flight_number + (1 | Hopper), data = data_clean)
+
+# Summarize the model
+summary(model)
+```
+
+
+```{r}
+R.version
+citation()
+```
+
